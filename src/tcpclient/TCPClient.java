@@ -20,7 +20,16 @@ public class TCPClient {
         socket = new Socket(host, port);
         inputS = socket.getInputStream();
         outputS = socket.getOutputStream();
-        System.out.println("Connected");
+    }
+
+    private void close() throws IOException{
+        outputS.close();
+        inputS.close();
+        socket.close();
+
+        outputS = null;
+        inputS = null;
+        socket = null;
     }
 
     public byte[] askServer(String host, int port, byte[] input) throws IOException {
@@ -32,6 +41,7 @@ public class TCPClient {
             buffer.write(temp);
         }
 
+        close();
         return buffer.toByteArray();
     }
 
@@ -43,6 +53,7 @@ public class TCPClient {
             buffer.write(temp);
         }
 
+        close();
         return buffer.toByteArray();
     }
 
