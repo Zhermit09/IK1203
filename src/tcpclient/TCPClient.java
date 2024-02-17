@@ -6,54 +6,61 @@ import java.io.*;
 
 public class TCPClient {
 
-    private Socket socket;
+    private final boolean shutdown;
+    private final Integer limit;
+    private final Socket socket;
     private OutputStream outputS;
     private InputStream inputS;
     private final ByteArrayOutputStream buffer;
 
-    public TCPClient() {
-        socket = null;
+    public TCPClient(boolean shutdown, Integer timeout, Integer limit) throws IOException {
+
+        socket = new Socket();
+
+        if (timeout != null) {
+            socket.setSoTimeout(timeout);
+        }
+
+        socket.setReceiveBufferSize(1);
+
+        this.shutdown = shutdown;
+        this.limit = limit;
         buffer = new ByteArrayOutputStream();
     }
 
     private void connect(String host, int port) throws IOException {
-        socket = new Socket(host, port);
+        InetAddress addr = InetAddress.getByName(host);
+        InetSocketAddress endP = new InetSocketAddress(addr, port);
+
+        socket.connect(endP);
         inputS = socket.getInputStream();
         outputS = socket.getOutputStream();
-    }
-
-    private void close() throws IOException{
-        outputS.close();
-        inputS.close();
-        socket.close();
-
-        outputS = null;
-        inputS = null;
-        socket = null;
     }
 
     public byte[] askServer(String host, int port, byte[] input) throws IOException {
         connect(host, port);
         outputS.write(input);
 
-        int temp;
-        while ((temp = inputS.read()) != -1) {
-            buffer.write(temp);
+        if (shutdown) {
+            socket.shutdownOutput();
         }
 
-        close();
-        return buffer.toByteArray();
-    }
-
-    public byte[] askServer(String host, int port) throws IOException {
-        connect(host, port);
-
         int temp;
-        while ((temp = inputS.read()) != -1) {
-            buffer.write(temp);
+        try {
+            if(limit != null) {
+                while ((temp = inputS.read()) != -1 && buffer.size() < limit) {
+                    buffer.write(temp);
+                }
+            }else {
+                while ((temp = inputS.read()) != -1) {
+                    buffer.write(temp);
+                }
+            }
+        } catch (SocketTimeoutException ex) {
+            System.err.println(ex);
         }
 
-        close();
+        socket.close();
         return buffer.toByteArray();
     }
 
