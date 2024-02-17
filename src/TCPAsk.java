@@ -10,9 +10,6 @@ public class TCPAsk {
     static int port = 0;                         // Server port number
     static byte[] userInputBytes = new byte[0];  // Data to send to server
 
-    /*
-     * Usage: explain how to use the program, then exit with failure status
-     */
     private static void usage() {
         System.err.println("Usage: TCPAsk [options] host port <data to server>");
         System.err.println("Possible options are:");

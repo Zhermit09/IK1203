@@ -45,8 +45,8 @@ public class TCPClient {
             socket.shutdownOutput();
         }
 
-        int temp;
         try {
+            int temp;
             if(limit != null) {
                 while ((temp = inputS.read()) != -1 && buffer.size() < limit) {
                     buffer.write(temp);
