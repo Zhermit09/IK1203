@@ -8,33 +8,32 @@ public class TCPClient {
 
     private final boolean shutdown;
     private final Integer limit;
-    private final Socket socket;
+    private final Integer timeout;
+
+    private Socket socket;
     private OutputStream outputS;
     private InputStream inputS;
-    private final ByteArrayOutputStream buffer;
+
+    private final byte[] buffer;
+    private final ByteArrayOutputStream output;
 
     public TCPClient(boolean shutdown, Integer timeout, Integer limit) throws IOException {
+        this.timeout = timeout;
+        this.shutdown = shutdown;
+        this.limit = limit;
 
-        socket = new Socket();
+        buffer = new byte[1024];
+        output = new ByteArrayOutputStream();
+    }
+
+    private void connect(String host, int port) throws IOException {
+        socket = new Socket(host, port);
+        inputS = socket.getInputStream();
+        outputS = socket.getOutputStream();
 
         if (timeout != null) {
             socket.setSoTimeout(timeout);
         }
-
-        socket.setReceiveBufferSize(1);
-
-        this.shutdown = shutdown;
-        this.limit = limit;
-        buffer = new ByteArrayOutputStream();
-    }
-
-    private void connect(String host, int port) throws IOException {
-        InetAddress addr = InetAddress.getByName(host);
-        InetSocketAddress endP = new InetSocketAddress(addr, port);
-
-        socket.connect(endP);
-        inputS = socket.getInputStream();
-        outputS = socket.getOutputStream();
     }
 
     public byte[] askServer(String host, int port, byte[] input) throws IOException {
@@ -46,14 +45,18 @@ public class TCPClient {
         }
 
         try {
-            int temp;
-            if(limit != null) {
-                while ((temp = inputS.read()) != -1 && buffer.size() < limit) {
-                    buffer.write(temp);
+            int bytes;
+            if (limit != null) {
+                while ((bytes = inputS.read(buffer)) != -1) {
+                    if (output.size() + bytes >= limit) {
+                        output.write(buffer, 0, limit - output.size());
+                        break;
+                    }
+                    output.write(buffer, 0, bytes);
                 }
-            }else {
-                while ((temp = inputS.read()) != -1) {
-                    buffer.write(temp);
+            } else {
+                while ((bytes = inputS.read(buffer)) != -1) {
+                    output.write(buffer, 0, bytes);
                 }
             }
         } catch (SocketTimeoutException ex) {
@@ -61,7 +64,7 @@ public class TCPClient {
         }
 
         socket.close();
-        return buffer.toByteArray();
+        return output.toByteArray();
     }
 
 }
