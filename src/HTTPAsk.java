@@ -11,7 +11,6 @@ public class HTTPAsk {
     static Integer limit;
     static Integer timeout;
 
-    static boolean badRequest;
 
     private static void reset() {
         hostname = null;
@@ -20,7 +19,6 @@ public class HTTPAsk {
         shutdown = false;
         limit = null;
         timeout = null;
-        badRequest = false;
     }
 
     private static void usage() {
@@ -41,20 +39,58 @@ public class HTTPAsk {
         return temp;
     }
 
-    private static void handleQuery(String query) {
+
+    private static void badRequestResponse(OutputStream outputS) throws IOException {
+        outputS.write("""
+                HTTP/1.1 400 Bad Request
+                Content-Type: text/plain
+                Content-Length: 37
+                                    
+                400 Bad Request: Invalid Query Syntax
+                """.getBytes());
+    }
+
+    private static void notFoundResponse(OutputStream outputS) throws IOException {
+        outputS.write("""
+                HTTP/1.1 404 Not Found
+                Content-Type: text/plain
+                Content-Length: 43
+                                    
+                404 Not Found: Query Could Not Be Completed
+                """.getBytes());
+    }
+
+    private static void httpResponse(OutputStream outputS) throws IOException {
+
+        try {
+            TCPClient tcpClient = new TCPClient(shutdown, timeout, limit);
+            byte[] outputBytes = tcpClient.askServer(hostname, port, input == null ? new byte[0] : (input + "\n").getBytes());
+
+            outputS.write(String.format("""
+                    HTTP/1.1 200 OK
+                    Content-Type: text/plain
+                    Content-Length: %d
+                                        
+                    """, outputBytes.length).getBytes());
+            outputS.write(outputBytes);
+
+        } catch (Exception e) {
+            notFoundResponse(outputS);
+        }
+    }
+
+    private static void handleQuery(String query, OutputStream outputS) throws IOException {
 
         String[] reqLine = query.split("\\s+");
 
         if (reqLine.length != 3 || !reqLine[0].equals("GET") || !reqLine[2].equals("HTTP/1.1")) {
-            badRequest = true;
-            // System.out.println("Bad request");
+            badRequestResponse(outputS);
             return;
         }
 
         String[] subQuery = reqLine[1].split("\\?");
         if (subQuery.length != 2 || !subQuery[0].equals("/ask")) {
-            badRequest = true;
-            // System.out.println("Bad request");
+            notFoundResponse(outputS);
             return;
         }
         String[] param = subQuery[1].split("&");
@@ -84,20 +120,19 @@ public class HTTPAsk {
                         timeout = Integer.parseInt(val);
                         break;
                     default:
-                        badRequest = true;
-                        // System.out.println("Bad request");
+                        badRequestResponse(outputS);
                         return;
                 }
             }
 
         } catch (Exception e) {
-            badRequest = true;
-            // System.out.println("Bad request");
+            badRequestResponse(outputS);
         }
     }
 
     private static void httpListen(Socket socket) throws IOException {
         InputStream inputS = socket.getInputStream();
+        OutputStream outputS = socket.getOutputStream();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] buffer = new byte[1024];
 
@@ -110,71 +145,21 @@ public class HTTPAsk {
         }
 
         try {
-            handleQuery(output.toString().split("\r\n", 2)[0]);
+            handleQuery(output.toString().split("\r\n", 2)[0], outputS);
+            httpResponse(outputS);
         } catch (Exception e) {
-            badRequest = true;
-        }
-    }
-
-    private static void badRequestResponse(OutputStream outputS) throws IOException {
-        outputS.write("""
-                HTTP/1.1 400 Bad Request
-                Content-Type: text/plain
-                Content-Length: 37
-                                    
-                400 Bad Request: Invalid Query Syntax
-                """.getBytes());
-    }
-
-    private static void notFoundResponse(OutputStream outputS) throws IOException {
-        outputS.write("""
-                HTTP/1.1 404 Not Found
-                Content-Type: text/plain
-                Content-Length: 43
-                                    
-                404 Not Found: Query Could Not Be Completed
-                """.getBytes());
-    }
-
-    private static void httpResponse(Socket socket) throws IOException {
-
-        OutputStream outputS = socket.getOutputStream();
-
-        if (badRequest) {
             badRequestResponse(outputS);
-            return;
-        }
-
-        try {
-            TCPClient tcpClient = new TCPClient(shutdown, timeout, limit);
-            byte[] outputBytes = tcpClient.askServer(hostname, port, input == null ? new byte[0] : (input + "\n").getBytes());
-
-            outputS.write(String.format("""
-                    HTTP/1.1 200 OK
-                    Content-Type: text/plain
-                    Content-Length: %d
-                                        
-                    """, outputBytes.length).getBytes());
-            // System.out.print(new String(outputBytes));
-            outputS.write(outputBytes);
-
-        } catch (Exception e) {
-            // System.out.println("Bad request");
-            notFoundResponse(outputS);
         }
     }
 
     public static void main(String[] args) throws Exception {
-        // System.out.println("Start");
         ServerSocket serverSocket = new ServerSocket(parseArg(args));
 
         while (true) {
             Socket socket = serverSocket.accept();
             httpListen(socket);
-            httpResponse(socket);
             socket.close();
             reset();
-            // System.out.println("Done");
         }
     }
 }
